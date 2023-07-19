@@ -10,9 +10,12 @@ namespace Application.Activities
 {
     public class List
     {
-        public class Query : IRequest<Result<List<ActivityDto>>> { }
+        public class Query : IRequest<Result<PagedLists<ActivityDto>>>
+        {
+            public PagingParams Params { get; set; }
+        }
 
-        public class Handler : IRequestHandler<Query, Result<List<ActivityDto>>>
+        public class Handler : IRequestHandler<Query, Result<PagedLists<ActivityDto>>>
         {
             private readonly DataContext _context;
             private readonly IMapper _mapper;
@@ -25,19 +28,26 @@ namespace Application.Activities
                 _userAccessor = userAccessor;
             }
 
-            public async Task<Result<List<ActivityDto>>> Handle(
+            public async Task<Result<PagedLists<ActivityDto>>> Handle(
                 Query request,
                 CancellationToken token
             )
             {
-                var activities = await _context.Activities
+                var query = _context.Activities
+                    .OrderBy(d => d.Date)
                     .ProjectTo<ActivityDto>(
                         _mapper.ConfigurationProvider,
                         new { currentUsername = _userAccessor.GetUsername() }
                     )
-                    .ToListAsync();
+                    .AsQueryable();
 
-                return Result<List<ActivityDto>>.Success(activities);
+                return Result<PagedLists<ActivityDto>>.Success(
+                    await PagedLists<ActivityDto>.CreateAsync(
+                        query,
+                        request.Params.PageNumber,
+                        request.Params.PageSize
+                    )
+                );
             }
         }
     }
